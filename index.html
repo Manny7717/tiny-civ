@@ -437,9 +437,13 @@ function initGame(loadSaved = false) {
   addUnit(0, 'settler', startLoc[0], startLoc[1]);
   addUnit(0, 'scout', startLoc[0] + 1, startLoc[1]);
 
-  // Reveal starting area
   // Reveal starting area (larger reveal on start)
   revealAround(startLoc[0], startLoc[1], 5);
+
+  // Center camera on player start
+  let [startPx, startPy] = HEX.hexToPixel(startLoc[0], startLoc[1], CONFIG.HEX_SIZE);
+  G.camera.x = Math.max(0, startPx - canvasW / 2);
+  G.camera.y = Math.max(0, startPy - canvasH / 2);
 
   // Place AI players
   for (let [c, r, pid] of aiStarts) {
