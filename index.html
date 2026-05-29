@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiny Civ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  body { background: #1a1a2e; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #eee; }
+  canvas { display: block; cursor: default; }
+
+  /* Top Bar */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 44px;
+    background: linear-gradient(180deg, #16213e, #0f3460);
+    border-bottom: 2px solid #e94560;
+    display: flex; align-items: center; padding: 0 16px;
+    gap: 20px; z-index: 10; font-size: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  }
+  #topbar .title { font-size: 18px; font-weight: bold; color: #e94560; margin-right: 8px; }
+  #topbar .stat { display: flex; align-items: center; gap: 4px; }
+  #topbar .stat-icon { font-size: 16px; }
+  #topbar .stat-val { font-weight: bold; min-width: 20px; }
+  #endturn-btn {
+    margin-left: auto; padding: 6px 20px;
+    background: #e94560; color: #fff; border: none;
+    border-radius: 4px; font-weight: bold; font-size: 14px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  #endturn-btn:hover { background: #ff6b6b; transform: scale(1.05); }
+  #endturn-btn:disabled { background: #555; cursor: not-allowed; transform: none; }
+
+  /* Side Panel */
+  #sidepanel {
+    position: fixed; top: 44px; right: 0; width: 240px;
+    height: calc(100vh - 44px); background: rgba(22,33,62,0.92);
+    border-left: 2px solid #0f3460; padding: 12px; z-index: 10;
+    overflow-y: auto; display: none; font-size: 13px;
+    backdrop-filter: blur(8px);
+  }
+  #sidepanel.open { display: block; }
+  #sidepanel h3 { color: #e94560; margin-bottom: 8px; font-size: 16px; }
+  #sidepanel .info-row { margin: 4px 0; display: flex; justify-content: space-between; }
+  #sidepanel .info-label { color: #888; }
+  #sidepanel .info-val { font-weight: bold; }
+  #sidepanel .action-btn {
+    display: block; width: 100%; padding: 8px; margin: 6px 0;
+    background: #0f3460; color: #eee; border: 1px solid #1a5276;
+    border-radius: 4px; cursor: pointer; font-size: 13px; text-align: center;
+    transition: background 0.2s;
+  }
+  #sidepanel .action-btn:hover { background: #1a5276; }
+  #sidepanel .action-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Minimap */
+  #minimap {
+    position: fixed; bottom: 12px; right: 12px; z-index: 10;
+    border: 2px solid #0f3460; border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+
+  /* Notification */
+  #notification {
+    position: fixed; top: 52px; left: 50%; transform: translateX(-50%);
+    background: rgba(233,69,96,0.9); color: #fff; padding: 8px 24px;
+    border-radius: 6px; font-weight: bold; font-size: 14px;
+    z-index: 20; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  #notification.show { opacity: 1; }
+
+  /* Startup overlay */
+  #startup {
+    position: fixed; inset: 0; z-index: 100;
+    background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #startup h1 { font-size: 64px; color: #e94560; margin-bottom: 8px; }
+  #startup p { font-size: 18px; color: #888; margin-bottom: 24px; }
+  #start-btn {
+    padding: 14px 48px; font-size: 20px; font-weight: bold;
+    background: #e94560; color: #fff; border: none; border-radius: 8px;
+    cursor: pointer; transition: transform 0.2s;
+  }
+  #start-btn:hover { transform: scale(1.1); }
+  #load-btn {
+    padding: 10px 36px; margin-top: 12px; font-size: 16px;
+    background: #0f3460; color: #aaa; border: 1px solid #1a5276;
+    border-radius: 8px; cursor: pointer; transition: background 0.2s;
+  }
+  #load-btn:hover { background: #1a5276; color: #eee; }
+
+  /* Scrollbar */
+  #sidepanel::-webkit-scrollbar { width: 6px; }
+  #sidepanel::-webkit-scrollbar-track { background: transparent; }
+  #sidepanel::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="startup">
+  <h1>⚔ TINY CIV</h1>
+  <p>Conquer the hex world</p>
+  <button id="start-btn">New Game</button>
+  <button id="load-btn">Continue Saved Game</button>
+</div>
+
+<div id="topbar">
+  <span class="title">TINY CIV</span>
+  <span class="stat"><span class="stat-icon">🗓</span> Turn <span class="stat-val" id="turn-val">1</span></span>
+  <span class="stat"><span class="stat-icon">🪙</span> <span class="stat-val" id="gold-val">0</span></span>
+  <span class="stat"><span class="stat-icon">👥</span> Pop <span class="stat-val" id="pop-val">0</span></span>
+  <span class="stat" style="color:#4fc3f7">🔵 Player <span id="player-color-val">1</span></span>
+  <button id="endturn-btn">▶ End Turn</button>
+</div>
+
+<div id="sidepanel"></div>
+<canvas id="gamecanvas"></canvas>
+<canvas id="minimap"></canvas>
+<div id="notification"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// TINY CIV — a 2D turn-based civilization game
+// ═══════════════════════════════════════════════════════════════
+
+// ─── CONFIG ────────────────────────────────────────────────────
+const CONFIG = {
+  MAP_W: 40,
+  MAP_H: 30,
+  HEX_SIZE: 26,
+  PLAYERS: [
+    { id: 0, name: 'You',    color: '#4fc3f7', ai: false },
+    { id: 1, name: 'Rome',   color: '#e53935', ai: true  },
+    { id: 2, name: 'Mongol', color: '#fdd835', ai: true  },
+  ],
+  FOW_VISIBLE_RANGE: 3,
+  UNIT_STATS: {
+    settler:  { name: 'Settler',  move: 2, attack: 0, defense: 1, health: 10, cost: 0, icon: '🚜' },
+    scout:    { name: 'Scout',    move: 4, attack: 2, defense: 1, health: 8,  cost: 0, icon: '🏹' },
+    warrior:  { name: 'Warrior',  move: 2, attack: 4, defense: 3, health: 15, cost: 50, icon: '⚔️' },
+    archer:   { name: 'Archer',   move: 2, attack: 3, defense: 2, health: 12, cost: 40, icon: '🏹' },
+  },
+  CITY_POP_GROWTH_TURNS: 5,
+  CITY_BASE_GOLD: 5,
+  CITY_BASE_DEFENSE: 3,
+};
+
+// ─── HEX GRID ──────────────────────────────────────────────────
+// Even-r offset coordinates (pointy-top hexes)
+const HEX = {
+  // Neighbor offsets for even-r
+  neighbors: [
+    // Even row (row % 2 === 0)
+    [[-1,0],[1,0],[0,-1],[1,-1],[-1,1],[0,1]],
+    // Odd row (row % 2 === 1)
+    [[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]]
+  ],
+  neighborDirs: ['W','E','NW','NE','SW','SE'],
+
+  pixelToHex(px, py, size) {
+    // Approximate then refine
+    const s3 = Math.sqrt(3);
+    let col = px / (s3 * size);
+    let row = py / (1.5 * size);
+    let best = null, bestDist = Infinity;
+    for (let dr = -2; dr <= 2; dr++) {
+      for (let dc = -2; dc <= 2; dc++) {
+        let c = Math.round(col) + dc;
+        let r = Math.round(row) + dr;
+        if (c < 0 || c >= CONFIG.MAP_W || r < 0 || r >= CONFIG.MAP_H) continue;
+        let [hx, hy] = HEX.hexToPixel(c, r, size);
+        let d = (px - hx) ** 2 + (py - hy) ** 2;
+        if (d < bestDist) { bestDist = d; best = [c, r]; }
+      }
+    }
+    return best;
+  },
+
+  hexToPixel(col, row, size) {
+    let s3 = Math.sqrt(3);
+    let x = size * s3 * (col + 0.5 * (row & 1));
+    let y = size * 1.5 * row;
+    return [x, y];
+  },
+
+  getNeighbors(col, row) {
+    let parity = row & 1;
+    let result = [];
+    for (let [dc, dr] of HEX.neighbors[parity]) {
+      let nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nc < CONFIG.MAP_W && nr >= 0 && nr < CONFIG.MAP_H) {
+        result.push([nc, nr]);
+      }
+    }
+    return result;
+  },
+
+  // Manhattan-ish distance on hex grid
+  distance(c1, r1, c2, r2) {
+    let dc = c2 - c1, dr = r2 - r1;
+    // Convert to cube coords and back
+    let q = c1, r = r1;
+    // For axial: q = col - (row - (row&1))/2 for even-r offset transform
+    // Simpler: just use BFS distances for small lookups
+    // For quick estimate, use axial conversion
+    let aq1 = c1 - Math.floor(r1 / 2);
+    let aq2 = c2 - Math.floor(r2 / 2);
+    let ar1 = r1, ar2 = r2;
+    let dq = aq2 - aq1, dr = ar2 - ar1;
+    let ds = -dq - dr;
+    return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(ds));
+  },
+
+  hexCorners(cx, cy, size) {
+    let pts = [];
+    for (let i = 0; i < 6; i++) {
+      let angle = Math.PI / 180 * (60 * i - 30);
+      pts.push([cx + size * Math.cos(angle), cy + size * Math.sin(angle)]);
+    }
+    return pts;
+  }
+};
+
+// ─── MAP GENERATION ────────────────────────────────────────────
+function generateMap() {
+  let grid = [];
+  for (let r = 0; r < CONFIG.MAP_H; r++) {
+    grid[r] = [];
+    for (let c = 0; c < CONFIG.MAP_W; c++) {
+      grid[r][c] = { terrain: 'grassland', explored: false, visible: false };
+    }
+  }
+
+  // Simple noise-based terrain generation
+  // Use a coarse grid of random values + bilinear interpolation
+  let noiseW = 8, noiseH = 6;
+  let noise = [];
+  for (let y = 0; y < noiseH; y++) {
+    noise[y] = [];
+    for (let x = 0; x < noiseW; x++) {
+      noise[y][x] = Math.random();
+    }
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smoothNoise(c, r) {
+    let fx = (c / CONFIG.MAP_W) * (noiseW - 1);
+    let fy = (r / CONFIG.MAP_H) * (noiseH - 1);
+    let x0 = Math.floor(fx), y0 = Math.floor(fy);
+    let x1 = Math.min(x0 + 1, noiseW - 1), y1 = Math.min(y0 + 1, noiseH - 1);
+    let tx = fx - x0, ty = fy - y0;
+    let v00 = noise[y0][x0], v10 = noise[y0][x1];
+    let v01 = noise[y1][x0], v11 = noise[y1][x1];
+    let v0 = lerp(v00, v10, tx);
+    let v1 = lerp(v01, v11, tx);
+    return lerp(v0, v1, ty);
+  }
+
+  // Second noise layer for moisture
+  let noise2 = [];
+  for (let y = 0; y < noiseH; y++) {
+    noise2[y] = [];
+    for (let x = 0; x < noiseW; x++) {
+      noise2[y][x] = Math.random();
+    }
+  }
+  function smoothMoisture(c, r) {
+    let fx = (c / CONFIG.MAP_W) * (noiseW - 1);
+    let fy = (r / CONFIG.MAP_H) * (noiseH - 1);
+    let x0 = Math.floor(fx), y0 = Math.floor(fy);
+    let x1 = Math.min(x0 + 1, noiseW - 1), y1 = Math.min(y0 + 1, noiseH - 1);
+    let tx = fx - x0, ty = fy - y0;
+    let v00 = noise2[y0][x0], v10 = noise2[y0][x1];
+    let v01 = noise2[y1][x0], v11 = noise2[y1][x1];
+    let v0 = lerp(v00, v10, tx);
+    let v1 = lerp(v01, v11, tx);
+    return lerp(v0, v1, ty);
+  }
+
+  // Extra pass: add some random noise for detail
+  let detailNoise = new Float32Array(CONFIG.MAP_W * CONFIG.MAP_H);
+  for (let i = 0; i < detailNoise.length; i++) {
+    detailNoise[i] = (Math.random() - 0.5) * 0.15;
+  }
+
+  for (let r = 0; r < CONFIG.MAP_H; r++) {
+    for (let c = 0; c < CONFIG.MAP_W; c++) {
+      let elev = smoothNoise(c, r) + detailNoise[r * CONFIG.MAP_W + c];
+      let moist = smoothMoisture(c, r) + detailNoise[r * CONFIG.MAP_W + c + 1234];
+      elev = Math.max(0, Math.min(1, elev));
+      moist = Math.max(0, Math.min(1, moist));
+
+      // Ensure continent in center
+      let cx = c / CONFIG.MAP_W - 0.5;
+      let cy = r / CONFIG.MAP_H - 0.5;
+      let distFromCenter = Math.sqrt(cx * cx + cy * cy) * 2.2;
+      elev = elev * (1 - distFromCenter * 0.4) + (1 - distFromCenter) * 0.3;
+
+      if (elev < 0.35) grid[r][c].terrain = 'water';
+      else if (elev < 0.5) grid[r][c].terrain = 'grassland';
+      else if (elev < 0.65) grid[r][c].terrain = 'grassland';
+      else if (elev < 0.78) grid[r][c].terrain = 'forest';
+      else if (elev < 0.88) grid[r][c].terrain = 'mountain';
+      else grid[r][c].terrain = 'desert';
+
+      // Moisture adjustments
+      if (grid[r][c].terrain === 'grassland' && moist > 0.7) grid[r][c].terrain = 'forest';
+      if (grid[r][c].terrain === 'grassland' && moist < 0.25) grid[r][c].terrain = 'desert';
+    }
+  }
+
+  // Ensure adequate playable starting area (7x7 block of non-water)
+  function findStartLocation() {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      let c = 2 + Math.floor(Math.random() * (CONFIG.MAP_W - 4));
+      let r = 2 + Math.floor(Math.random() * (CONFIG.MAP_H - 4));
+      if (grid[r][c].terrain !== 'water') {
+        // Check that we can place a 3x3ish area
+        let ok = true;
+        for (let dr = -2; dr <= 2; dr++) {
+          for (let dc = -2; dc <= 2; dc++) {
+            let nc = c + dc, nr = r + dr;
+            if (nc >= 0 && nc < CONFIG.MAP_W && nr >= 0 && nr < CONFIG.MAP_H) {
+              if (grid[nr][nc].terrain === 'water') ok = false;
+            }
+          }
+        }
+        if (ok) return [c, r];
+      }
+    }
+    // Fallback
+    return [Math.floor(CONFIG.MAP_W / 3), Math.floor(CONFIG.MAP_H / 2)];
+  }
+
+  let startLoc = findStartLocation();
+
+  // Clear a small area around start
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      let nc = startLoc[0] + dc, nr = startLoc[1] + dr;
+      if (nc >= 0 && nc < CONFIG.MAP_W && nr >= 0 && nr < CONFIG.MAP_H) {
+        grid[nr][nc].terrain = 'grassland';
+      }
+    }
+  }
+
+  // AI start positions (far from player)
+  let aiStarts = [];
+  for (let pid = 1; pid < CONFIG.PLAYERS.length; pid++) {
+    let found = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      let c = 2 + Math.floor(Math.random() * (CONFIG.MAP_W - 4));
+      let r = 2 + Math.floor(Math.random() * (CONFIG.MAP_H - 4));
+      let dist = HEX.distance(c, r, startLoc[0], startLoc[1]);
+      if (dist > 15 && grid[r][c].terrain !== 'water') {
+        let ok = true;
+        for (let [ac, ar] of aiStarts) {
+          if (HEX.distance(c, r, ac, ar) < 10) ok = false;
+        }
+        if (ok) {
+          for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+              let nc = c + dc, nr = r + dr;
+              if (nc >= 0 && nc < CONFIG.MAP_W && nr >= 0 && nr < CONFIG.MAP_H) {
+                grid[nr][nc].terrain = 'grassland';
+              }
+            }
+          }
+          aiStarts.push([c, r, pid]);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      // Place them somewhere reasonable
+      let angle = (pid / CONFIG.PLAYERS.length) * Math.PI * 2;
+      let dist = 12;
+      let c = Math.floor(startLoc[0] + dist * Math.cos(angle));
+      let r = Math.floor(startLoc[1] + dist * Math.sin(angle));
+      c = Math.max(2, Math.min(CONFIG.MAP_W - 3, c));
+      r = Math.max(2, Math.min(CONFIG.MAP_H - 3, r));
+      aiStarts.push([c, r, pid]);
+    }
+  }
+
+  return { grid, startLoc, aiStarts };
+}
+
+// ─── GAME STATE ────────────────────────────────────────────────
+let G = null; // Global game state
+
+const TERRAIN_COLORS = {
+  grassland: { fill: '#5a8f3c', stroke: '#4a7f2c', dark: '#2a4f1c', explore: '#3a6f2c' },
+  forest:    { fill: '#2d6b2d', stroke: '#1d5b1d', dark: '#1a3a1a', explore: '#2a5b2a' },
+  mountain:  { fill: '#7a6a5a', stroke: '#6a5a4a', dark: '#3a3a2a', explore: '#5a5a4a' },
+  water:     { fill: '#2a5a8a', stroke: '#1a4a7a', dark: '#1a2a4a', explore: '#2a4a7a' },
+  desert:    { fill: '#c8b86a', stroke: '#b8a85a', dark: '#7a7a4a', explore: '#a8a85a' },
+};
+
+function initGame(loadSaved = false) {
+  if (loadSaved) {
+    let saved = localStorage.getItem('tinyciv_save');
+    if (saved) {
+      try { G = JSON.parse(saved); G.loaded = true; return; } catch(e) {}
+    }
+  }
+
+  let { grid, startLoc, aiStarts } = generateMap();
+
+  G = {
+    turn: 1,
+    players: CONFIG.PLAYERS.map(p => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      ai: p.ai,
+      alive: true,
+      gold: p.id === 0 ? 100 : 75,
+    })),
+    grid,
+    units: [],
+    cities: [],
+    selected: null, // { type: 'unit'|'city', id: number }
+    currentPlayer: 0,
+    phase: 'idle', // idle | moving | enemy_turn
+    camera: { x: 0, y: 0 },
+    loaded: false,
+    turnInitialized: false,
+    logs: [],
+  };
+
+  // Place player's starting units
+  addUnit(0, 'settler', startLoc[0], startLoc[1]);
+  addUnit(0, 'scout', startLoc[0] + 1, startLoc[1]);
+
+  // Reveal starting area
+  revealAround(startLoc[0], startLoc[1], CONFIG.FOW_VISIBLE_RANGE * 2);
+
+  // Place AI players
+  for (let [c, r, pid] of aiStarts) {
+    addUnit(pid, 'settler', c, r);
+    addUnit(pid, 'scout', c + 1, r + 1);
+    // Reveal AI start area (for AI)
+  }
+}
+
+function addUnit(playerId, type, col, row) {
+  let stats = CONFIG.UNIT_STATS[type];
+  let unit = {
+    id: G.units.length + G.cities.length + 1,
+    playerId,
+    type,
+    col, row,
+    health: stats.health,
+    maxHealth: stats.health,
+    moves: stats.move,
+    maxMoves: stats.move,
+    attack: stats.attack,
+    defense: stats.defense,
+    fortified: false,
+  };
+  G.units.push(unit);
+  return unit;
+}
+
+function addCity(playerId, col, row) {
+  let city = {
+    id: G.units.length + G.cities.length + 1,
+    playerId,
+    col, row,
+    health: 20,
+    maxHealth: 20,
+    population: 1,
+    goldPerTurn: CONFIG.CITY_BASE_GOLD,
+    productionQueue: [],
+    turnsToGrow: CONFIG.CITY_POP_GROWTH_TURNS,
+    hasBuiltThisTurn: false,
+  };
+  G.cities.push(city);
+  // Reveal around city
+  revealAround(col, row, CONFIG.FOW_VISIBLE_RANGE);
+  // Remove any unit at this position
+  let idx = G.units.findIndex(u => u.col === col && u.row === row && !u.dead);
+  if (idx >= 0) G.units.splice(idx, 1);
+  return city;
+}
+
+// ─── FOG OF WAR ────────────────────────────────────────────────
+function revealAround(col, row, range) {
+  for (let dr = -range; dr <= range; dr++) {
+    for (let dc = -range; dc <= range; dc++) {
+      let nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nc < CONFIG.MAP_W && nr >= 0 && nr < CONFIG.MAP_H) {
+        if (HEX.distance(col, row, nc, nr) <= range) {
+          G.grid[nr][nc].explored = true;
+          G.grid[nr][nc].visible = true;
+        }
+      }
+    }
+  }
+}
+
+function updateFOW(playerId) {
+  // Reset visibility
+  for (let r = 0; r < CONFIG.MAP_H; r++) {
+    for (let c = 0; c < CONFIG.MAP_W; c++) {
+      G.grid[r][c].visible = false;
+    }
+  }
+
+  // Reveal around units
+  for (let u of G.units) {
+    if (u.playerId === playerId && !u.dead) {
+      revealAround(u.col, u.row, CONFIG.FOW_VISIBLE_RANGE);
+    }
+  }
+
+  // Reveal around cities
+  for (let c of G.cities) {
+    if (c.playerId === playerId) {
+      revealAround(c.col, c.row, CONFIG.FOW_VISIBLE_RANGE + 1);
+    }
+  }
+}
+
+// ─── PATHFINDING (BFS) ─────────────────────────────────────────
+function findPath(fromCol, fromRow, toCol, toRow, unit) {
+  if (fromCol === toCol && fromRow === toRow) return [];
+
+  let queue = [[fromCol, fromRow]];
+  let visited = new Set();
+  let parent = new Map();
+  let key = (c, r) => `${c},${r}`;
+  visited.add(key(fromCol, fromRow));
+
+  while (queue.length > 0) {
+    let [c, r] = queue.shift();
+    if (c === toCol && r === toRow) {
+      // Reconstruct path
+      let path = [];
+      let cur = key(toCol, toRow);
+      while (cur !== key(fromCol, fromRow)) {
+        let [pc, pr] = cur.split(',').map(Number);
+        path.unshift([pc, pr]);
+        cur = parent.get(cur);
+      }
+      return path;
+    }
+
+    for (let [nc, nr] of HEX.getNeighbors(c, r)) {
+      let k = key(nc, nr);
+      if (visited.has(k)) continue;
+
+      // Check if passable
+      let terrain = G.grid[nr][nc].terrain;
+      if (terrain === 'water') continue;
+      if (terrain === 'mountain' && unit && unit.type !== 'scout') {
+        // Scouts can cross mountains, others can't
+        if (unit.type !== 'scout') continue;
+      }
+
+      // Check for blocking units (enemy units block)
+      let blockingUnit = G.units.find(u => u.col === nc && u.row === nr && !u.dead);
+      if (blockingUnit && blockingUnit.playerId !== (unit ? unit.playerId : -1)) continue;
+
+      visited.add(k);
+      parent.set(k, key(c, r));
+      queue.push([nc, nr]);
+    }
+  }
+
+  return null; // No path
+}
+
+// ─── COMBAT ────────────────────────────────────────────────────
+function resolveCombat(attacker, defender) {
+  // Simple combat formula
+  let attackPower = attacker.attack + (Math.random() * 3);
+  let defensePower = defender.defense + (defender.fortified ? 2 : 0) + (Math.random() * 3);
+  let damage = Math.max(1, Math.round(attackPower - defensePower * 0.5));
+
+  // Defenders on their city get bonus
+  let defendingCity = G.cities.find(c => c.col === defender.col && c.row === defender.row);
+  if (defendingCity && defendingCity.playerId === defender.playerId) {
+    damage = Math.max(1, damage - CONFIG.CITY_BASE_DEFENSE);
+  }
+
+  defender.health -= damage;
+  addLog(`${CONFIG.UNIT_STATS[attacker.type].icon} ${G.players[attacker.playerId].name}'s ${CONFIG.UNIT_STATS[attacker.type].name} attacks ${G.players[defender.playerId].name}'s ${CONFIG.UNIT_STATS[defender.type].name} for ${damage} damage!`);
+
+  // Counterattack if defender survives
+  if (defender.health > 0) {
+    let counterDmg = Math.max(1, Math.round(defender.attack * 0.5 - attacker.defense * 0.3 + (Math.random() * 2)));
+    counterDmg = Math.max(1, counterDmg);
+    attacker.health -= counterDmg;
+    addLog(`${G.players[defender.playerId].name}'s ${CONFIG.UNIT_STATS[defender.type].name} counterattacks for ${counterDmg} damage!`);
+  }
+
+  // Check deaths
+  if (attacker.health <= 0) {
+    attacker.dead = true;
+    addLog(`${CONFIG.UNIT_STATS[attacker.type].icon} ${G.players[attacker.playerId].name}'s ${CONFIG.UNIT_STATS[attacker.type].name} was destroyed!`);
+  }
+  if (defender.health <= 0) {
+    defender.dead = true;
+    attacker.col = defender.col;
+    attacker.row = defender.row;
+    addLog(`${CONFIG.UNIT_STATS[defender.type].icon} ${G.players[defender.playerId].name}'s ${CONFIG.UNIT_STATS[defender.type].name} was destroyed!`);
+  }
+}
+
+// ─── AI LOGIC ──────────────────────────────────────────────────
+function runAITurn(playerId) {
+  let playerUnits = G.units.filter(u => u.playerId === playerId && !u.dead);
+  let playerCities = G.cities.filter(c => c.playerId === playerId);
+
+  // Reset moves for all units
+  for (let u of playerUnits) u.moves = u.maxMoves;
+
+  // Cities produce gold
+  for (let c of playerCities) {
+    G.players[playerId].gold += c.goldPerTurn + c.population;
+    // Population growth
+    if (--c.turnsToGrow <= 0) {
+      c.population = Math.min(c.population + 1, 10);
+      c.turnsToGrow = CONFIG.CITY_POP_GROWTH_TURNS;
+    }
+  }
+
+  // Cities produce units
+  for (let c of playerCities) {
+    c.hasBuiltThisTurn = false;
+  }
+
+  // Build units at cities
+  for (let c of playerCities) {
+    if (!c.productionQueue || c.productionQueue.length === 0) {
+      // Decide what to build
+      let unitCount = playerUnits.length;
+      let enemyNearby = G.units.some(u => u.playerId !== playerId && !u.dead &&
+        HEX.distance(u.col, u.row, c.col, c.row) < 8);
+      let cityCount = playerCities.length;
+
+      if (unitCount < cityCount * 2 || enemyNearby) {
+        // Build warriors
+        if (G.players[playerId].gold >= 50) {
+          c.productionQueue.push('warrior');
+          G.players[playerId].gold -= 50;
+        }
+      } else if (unitCount < cityCount * 3) {
+        if (G.players[playerId].gold >= 40) {
+          c.productionQueue.push('archer');
+          G.players[playerId].gold -= 40;
+        }
+      }
+    }
+  }
+
+  // Complete production
+  for (let c of playerCities) {
+    if (c.productionQueue && c.productionQueue.length > 0 && !c.hasBuiltThisTurn) {
+      let produced = c.productionQueue.shift();
+      c.hasBuiltThisTurn = true;
+      // Place unit adjacent to city
+      let neighbors = HEX.getNeighbors(c.col, c.row);
+      let placed = false;
+      for (let [nc, nr] of neighbors) {
+        let terrain = G.grid[nr][nc].terrain;
+        if (terrain !== 'water' && !G.units.some(u => u.col === nc && u.row === nr && !u.dead)) {
+          addUnit(playerId, produced, nc, nr);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        // Place on city (will be a defender)
+        addUnit(playerId, produced, c.col, c.row);
+      }
+      // Mark moves for the newly built unit
+      let newUnit = G.units[G.units.length - 1];
+      if (newUnit) {
+        newUnit.moves = 0; // Can't move same turn built
+        newUnit.fortified = true;
+      }
+    }
+  }
+
+  // Move units
+  let movedUnits = new Set();
+  for (let unit of playerUnits) {
+    if (movedUnits.has(unit.id) || unit.moves <= 0 || unit.dead) continue;
+
+    // Find nearest enemy
+    let nearestEnemy = null, nearestDist = Infinity;
+    for (let u of G.units) {
+      if (u.playerId === playerId || u.dead) continue;
+      // Only see enemy if it's visible to this AI's FOW
+      // For simplicity, AI can see all (omniscient AI)
+      let d = HEX.distance(unit.col, unit.row, u.col, u.row);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestEnemy = u;
+      }
+    }
+
+    if (nearestEnemy && nearestDist <= unit.moves) {
+      // Try to attack
+      let path = findPath(unit.col, unit.row, nearestEnemy.col, nearestEnemy.row, unit);
+      if (path) {
+        for (let step of path) {
+          if (unit.moves <= 0) break;
+          let [nc, nr] = step;
+          // Check if enemy is here
+          let defender = G.units.find(u => u.col === nc && u.row === nr && !u.dead && u.playerId !== playerId);
+          if (defender) {
+            resolveCombat(unit, defender);
+            unit.moves--;
+            movedUnits.add(unit.id);
+            break;
+          } else {
+            unit.col = nc;
+            unit.row = nr;
+            unit.moves--;
+          }
+        }
+      }
+    } else if (unit.type === 'settler') {
+      // Settlers found cities
+      let terrain = G.grid[unit.row][unit.col].terrain;
+      if (terrain !== 'water' && !G.cities.some(c => c.col === unit.col && c.row === unit.row)) {
+        // Check not too close to other AI cities
+        let tooClose = G.cities.some(c => c.playerId === playerId &&
+          HEX.distance(c.col, c.row, unit.col, unit.row) < 5);
+        if (!tooClose && playerCities.length < 8) {
+          let city = addCity(playerId, unit.col, unit.row);
+          unit.dead = true;
+          addLog(`${G.players[playerId].name} founded a new city!`);
+          movedUnits.add(unit.id);
+          continue;
+        }
+      }
+      // Move settler towards open area
+      moveAITowardsOpen(unit, playerCities, movedUnits);
+    } else {
+      // Move towards enemy territory or explore
+      moveAITowardsEnemy(unit, nearestEnemy, playerCities, movedUnits);
+    }
+  }
+
+  // Mark remaining units fortified
+  for (let u of playerUnits) {
+    if (!movedUnits.has(u.id) && u.moves > 0) {
+      u.fortified = true;
+    }
+  }
+}
+
+function moveAITowardsEnemy(unit, nearestEnemy, cities, movedUnits) {
+  let target = null;
+  if (nearestEnemy) {
+    // Move towards enemy
+    let path = findPath(unit.col, unit.row, nearestEnemy.col, nearestEnemy.row, unit);
+    if (path) {
+      for (let i = 0; i < Math.min(path.length, unit.moves); i++) {
+        let [nc, nr] = path[i];
+        let defender = G.units.find(u => u.col === nc && u.row === nr && !u.dead && u.playerId !== unit.playerId);
+        if (defender) {
+          resolveCombat(unit, defender);
+          unit.moves--;
+          movedUnits.add(unit.id);
+          return;
+        }
+        unit.col = nc;
+        unit.row = nr;
+        unit.moves--;
+      }
+      movedUnits.add(unit.id);
+      return;
+    }
+  }
+
+  // Explore: move towards unexplored areas
+  let moves = unit.moves;
+  for (let i = 0; i < moves; i++) {
+    let neighbors = HEX.getNeighbors(unit.col, unit.row);
+    // Try to move toward unexplored tiles
+    let unexplored = neighbors.filter(([nc, nr]) =>
+      !G.grid[nr][nc].explored && G.grid[nr][nc].terrain !== 'water' &&
+      !(unit.type !== 'scout' && G.grid[nr][nc].terrain === 'mountain') &&
+      !G.units.some(u => u.col === nc && u.row === nr && !u.dead && u.playerId !== unit.playerId)
+    );
+    if (unexplored.length > 0) {
+      let [nc, nr] = unexplored[Math.floor(Math.random() * unexplored.length)];
+      unit.col = nc;
+      unit.row = nr;
+      unit.moves--;
+    } else {
+      // Random walk
+      let passable = neighbors.filter(([nc, nr]) =>
+        G.grid[nr][nc].terrain !== 'water' &&
+        !(unit.type !== 'scout' && G.grid[nr][nc].terrain === 'mountain') &&
+        !G.units.some(u => u.col === nc && u.row === nr && !u.dead && u.playerId !== unit.playerId)
+      );
+      if (passable.length > 0) {
+        let [nc, nr] = passable[Math.floor(Math.random() * passable.length)];
+        unit.col = nc;
+        unit.row = nr;
+        unit.moves--;
+      } else break;
+    }
+  }
+  movedUnits.add(unit.id);
+}
+
+function moveAITowardsOpen(unit, cities, movedUnits) {
+  // Move away from existing cities (towards open space)
+  for (let i = 0; i < unit.moves; i++) {
+    let neighbors = HEX.getNeighbors(unit.col, unit.row);
+    let best = null, bestScore = -Infinity;
+    for (let [nc, nr] of neighbors) {
+      if (G.grid[nr][nc].terrain === 'water') continue;
+      if (G.units.some(u => u.col === nc && u.row === nr && !u.dead && u.playerId !== unit.playerId)) continue;
+
+      let score = 0;
+      for (let c of cities) {
+        score -= HEX.distance(nc, nr, c.col, c.row) < 5 ? 100 : 0;
+      }
+      score += Math.random() * 5;
+      if (score > bestScore) { bestScore = score; best = [nc, nr]; }
+    }
+    if (best) {
+      unit.col = best[0];
+      unit.row = best[1];
+      unit.moves--;
+    } else break;
+  }
+  movedUnits.add(unit.id);
+}
+
+// ─── TURN MANAGEMENT ───────────────────────────────────────────
+function startTurn() {
+  let player = G.players[G.currentPlayer];
+  if (player.ai) {
+    // Reset unit moves
+    for (let u of G.units) {
+      if (u.playerId === G.currentPlayer && !u.dead) {
+        u.moves = u.maxMoves;
+        u.fortified = false;
+      }
+    }
+    // Run AI
+    runAITurn(G.currentPlayer);
+    // Clean dead units
+    G.units = G.units.filter(u => !u.dead);
+    endTurn();
+  } else {
+    // Human turn
+    G.turnInitialized = true;
+    G.selected = null;
+    G.phase = 'idle';
+    let playerCities = G.cities.filter(c => c.playerId === G.currentPlayer);
+    for (let c of playerCities) c.hasBuiltThisTurn = false;
+
+    // Income
+    let goldIncome = 0;
+    for (let c of playerCities) {
+      goldIncome += c.goldPerTurn + c.population;
+    }
+    G.players[G.currentPlayer].gold += goldIncome;
+
+    // Population growth
+    for (let c of playerCities) {
+      if (--c.turnsToGrow <= 0) {
+        c.population = Math.min(c.population + 1, 10);
+        c.turnsToGrow = CONFIG.CITY_POP_GROWTH_TURNS;
+      }
+    }
+
+    // Reset unit moves
+    for (let u of G.units) {
+      if (u.playerId === G.currentPlayer && !u.dead) {
+        u.moves = u.maxMoves;
+        u.fortified = false;
+      }
+    }
+
+    updateFOW(G.currentPlayer);
+    render();
+    saveGame();
+  }
+}
+
+function endTurn() {
+  // Check victory
+  let alivePlayers = new Set();
+  for (let u of G.units) {
+    if (!u.dead) alivePlayers.add(u.playerId);
+  }
+  for (let c of G.cities) {
+    if (c.health > 0) alivePlayers.add(c.playerId);
+  }
+
+  for (let p of G.players) {
+    p.alive = alivePlayers.has(p.id);
+  }
+
+  let alive = G.players.filter(p => p.alive);
+  if (alive.length <= 1) {
+    if (alive.length === 1 && alive[0].id === 0) {
+      showNotification('🏆 VICTORY! You have conquered all!');
+    } else if (alive.length === 1) {
+      showNotification(`💀 Defeat! ${alive[0].name} triumphs!`);
+    } else {
+      showNotification('💀 All civilizations have fallen!');
+    }
+    document.getElementById('endturn-btn').disabled = true;
+    return;
+  }
+
+  // Move to next player
+  do {
+    G.currentPlayer = (G.currentPlayer + 1) % CONFIG.PLAYERS.length;
+  } while (!G.players[G.currentPlayer].alive);
+
+  G.turn++;
+  updateUI();
+  startTurn();
+}
+
+// ─── PLAYER ACTIONS ────────────────────────────────────────────
+function moveUnit(unitId, toCol, toRow) {
+  let unit = G.units.find(u => u.id === unitId);
+  if (!unit || unit.playerId !== G.currentPlayer || unit.dead) return false;
+
+  let path = findPath(unit.col, unit.row, toCol, toRow, unit);
+  if (!path || path.length === 0) return false;
+
+  let cost = path.length;
+  if (cost > unit.moves) return false;
+
+  // Check for enemy at destination
+  let defender = G.units.find(u => u.col === toCol && u.row === toRow && !u.dead && u.playerId !== unit.playerId);
+  if (defender) {
+    // Path should end one step before, then we attack
+    if (path.length > 1) {
+      let [nc, nr] = path[path.length - 2];
+      unit.col = nc;
+      unit.row = nr;
+      unit.moves -= (path.length - 1);
+    }
+    resolveCombat(unit, defender);
+    if (defender.dead) {
+      G.units = G.units.filter(u => !u.dead);
+    }
+    if (unit.dead) {
+      G.units = G.units.filter(u => !u.dead);
+      G.selected = null;
+    }
+  } else {
+    // Normal move
+    for (let step of path) {
+      if (unit.moves <= 0) break;
+      unit.col = step[0];
+      unit.row = step[1];
+      unit.moves--;
+    }
+  }
+
+  updateFOW(G.currentPlayer);
+
+  // Check for settler founding city
+  if (unit.type === 'settler' && !unit.dead && unit.moves >= 0) {
+    let terrain = G.grid[unit.row][unit.col].terrain;
+    if (terrain !== 'water' && !G.cities.some(c => c.col === unit.col && c.row === unit.row)) {
+      // Show option in UI
+    }
+  }
+
+  render();
+  updateUI();
+  saveGame();
+  return true;
+}
+
+function foundCity(unitId) {
+  let unit = G.units.find(u => u.id === unitId);
+  if (!unit || unit.type !== 'settler' || unit.playerId !== G.currentPlayer) return false;
+  let terrain = G.grid[unit.row][unit.col].terrain;
+  if (terrain === 'water') return false;
+  if (G.cities.some(c => c.col === unit.col && c.row === unit.row)) return false;
+
+  // Check not too close to other cities
+  let tooClose = G.cities.some(c => HEX.distance(c.col, c.row, unit.col, unit.row) < 4);
+  if (tooClose) {
+    showNotification('❌ Too close to another city!');
+    return false;
+  }
+
+  let city = addCity(G.currentPlayer, unit.col, unit.row);
+  unit.dead = true;
+  G.units = G.units.filter(u => !u.dead);
+  G.selected = { type: 'city', id: city.id };
+  showNotification(`🏙 Founded ${G.players[G.currentPlayer].name}'s city!`);
+  render();
+  updateUI();
+  saveGame();
+  return true;
+}
+
+function startCityProduction(cityId, unitType) {
+  let city = G.cities.find(c => c.id === cityId);
+  if (!city || city.playerId !== G.currentPlayer) return;
+  if (city.hasBuiltThisTurn) {
+    showNotification('❌ City already built this turn!');
+    return;
+  }
+
+  let cost = CONFIG.UNIT_STATS[unitType].cost;
+  if (G.players[G.currentPlayer].gold < cost) {
+    showNotification(`❌ Need ${cost} gold!`);
+    return;
+  }
+
+  G.players[G.currentPlayer].gold -= cost;
+  city.productionQueue.push(unitType);
+
+  // Complete immediately (simplified - 1 turn build)
+  let produced = city.productionQueue.shift();
+  city.hasBuiltThisTurn = true;
+
+  // Find adjacent hex to place unit
+  let neighbors = HEX.getNeighbors(city.col, city.row);
+  let placed = false;
+  for (let [nc, nr] of neighbors) {
+    let terrain = G.grid[nr][nc].terrain;
+    if (terrain !== 'water' && !G.units.some(u => u.col === nc && u.row === nr && !u.dead)) {
+      addUnit(G.currentPlayer, produced, nc, nr);
+      placed = true;
+      break;
+    }
+  }
+  if (!placed) {
+    // Place on city tile
+    addUnit(G.currentPlayer, produced, city.col, city.row);
+  }
+
+  let newUnit = G.units[G.units.length - 1];
+  newUnit.moves = 0;
+  newUnit.fortified = true;
+
+  showNotification(`🏗 ${G.players[G.currentPlayer].name} trained ${CONFIG.UNIT_STATS[produced].name}!`);
+  render();
+  updateUI();
+  saveGame();
+}
+
+// ─── RENDERING ─────────────────────────────────────────────────
+let canvas, ctx, miniCanvas, miniCtx;
+let canvasW, canvasH;
+
+function render() {
+  if (!canvas) return;
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.save();
+
+  // Background
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Camera
+  ctx.translate(-G.camera.x, -G.camera.y);
+
+  let size = CONFIG.HEX_SIZE;
+  let s3 = Math.sqrt(3);
+  let hexW = s3 * size;
+  let hexH = 2 * size;
+
+  // Determine visible range
+  let startCol = Math.max(0, Math.floor(G.camera.x / hexW) - 1);
+  let endCol = Math.min(CONFIG.MAP_W, Math.ceil((G.camera.x + canvasW) / hexW) + 2);
+  let startRow = Math.max(0, Math.floor(G.camera.y / (1.5 * size)) - 1);
+  let endRow = Math.min(CONFIG.MAP_H, Math.ceil((G.camera.y + canvasH) / (1.5 * size)) + 2);
+
+  // Draw terrain
+  for (let r = startRow; r < endRow; r++) {
+    for (let c = startCol; c < endCol; c++) {
+      let tile = G.grid[r][c];
+      let [px, py] = HEX.hexToPixel(c, r, size);
+      let colors = TERRAIN_COLORS[tile.terrain];
+
+      let fillColor, strokeColor;
+      if (!tile.explored) {
+        fillColor = '#1a1a2e';
+        strokeColor = '#1a1a2e';
+      } else if (!tile.visible) {
+        fillColor = colors.explore || colors.dark;
+        strokeColor = colors.dark;
+      } else {
+        fillColor = colors.fill;
+        strokeColor = colors.stroke;
+      }
+
+      let corners = HEX.hexCorners(px, py, size);
+      ctx.beginPath();
+      ctx.moveTo(corners[0][0], corners[0][1]);
+      for (let i = 1; i < 6; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+
+      // Terrain detail icons (only visible)
+      if (tile.visible) {
+        ctx.font = `${size * 0.6}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (tile.terrain === 'mountain') {
+          ctx.fillStyle = '#8a7a6a';
+          ctx.font = `${size * 0.8}px sans-serif`;
+          ctx.fillText('▲', px, py - 2);
+        } else if (tile.terrain === 'forest') {
+          ctx.fillStyle = '#1d6b1d';
+          ctx.font = `${size * 0.7}px sans-serif`;
+          ctx.fillText('🌲', px, py);
+        } else if (tile.terrain === 'desert') {
+          ctx.fillStyle = '#a8986a';
+          ctx.fillText('~', px, py);
+        } else if (tile.terrain === 'water') {
+          // Subtle wave animation (skip for perf)
+        }
+      }
+    }
+  }
+
+  // Draw city radius / placement hints
+  for (let c of G.cities) {
+    let [px, py] = HEX.hexToPixel(c.col, c.row, size);
+    let colors = TERRAIN_COLORS[G.grid[c.row][c.col].terrain];
+
+    // City base
+    let cityColor = G.players[c.playerId].color;
+    let corners = HEX.hexCorners(px, py, size * 0.8);
+    ctx.beginPath();
+    ctx.moveTo(corners[0][0], corners[0][1]);
+    for (let i = 1; i < 6; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = cityColor + '80';
+    ctx.fill();
+    ctx.strokeStyle = cityColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // City buildings
+    if (G.grid[c.row][c.col].visible || c.playerId === G.currentPlayer) {
+      ctx.fillStyle = cityColor;
+
+      // Main building
+      ctx.fillRect(px - size * 0.35, py - size * 0.35, size * 0.25, size * 0.3);
+      ctx.fillRect(px - size * 0.05, py - size * 0.4, size * 0.25, size * 0.35);
+      ctx.fillRect(px + size * 0.15, py - size * 0.25, size * 0.2, size * 0.2);
+
+      // Roofs
+      ctx.fillStyle = '#ddd';
+      ctx.beginPath();
+      ctx.moveTo(px - size * 0.4, py - size * 0.35);
+      ctx.lineTo(px - size * 0.1, py - size * 0.55);
+      ctx.lineTo(px - size * 0.05, py - size * 0.4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Population indicator
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${size * 0.5}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`👤${c.population}`, px, py + size * 0.8);
+
+      // Health bar
+      let hbW = size * 1.2;
+      let hbH = 4;
+      let hbX = px - hbW / 2;
+      let hbY = py - size * 0.85;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(hbX, hbY, hbW, hbH);
+      let hpRatio = c.health / c.maxHealth;
+      ctx.fillStyle = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#ff9800' : '#f44336';
+      ctx.fillRect(hbX, hbY, hbW * hpRatio, hbH);
+    }
+  }
+
+  // Draw units
+  for (let u of G.units) {
+    if (u.dead) continue;
+    let tile = G.grid[u.row][u.col];
+    if (!tile.visible && u.playerId !== G.currentPlayer) continue;
+
+    let [px, py] = HEX.hexToPixel(u.col, u.row, size);
+    let color = G.players[u.playerId].color;
+    let isSelected = G.selected && G.selected.type === 'unit' && G.selected.id === u.id;
+
+    // Selection highlight
+    if (isSelected) {
+      let corners = HEX.hexCorners(px, py, size * 0.75);
+      ctx.beginPath();
+      ctx.moveTo(corners[0][0], corners[0][1]);
+      for (let i = 1; i < 6; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+      ctx.closePath();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Unit circle
+    let uSize = size * 0.55;
+    ctx.beginPath();
+    ctx.arc(px, py, uSize, 0, Math.PI * 2);
+    ctx.fillStyle = color + 'CC';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Unit icon
+    let stats = CONFIG.UNIT_STATS[u.type];
+    ctx.font = `${uSize * 1.1}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(stats.icon, px, py + 1);
+
+    // Health bar
+    if (u.health < u.maxHealth) {
+      let hbW = size * 0.9;
+      let hbH = 3;
+      let hbX = px - hbW / 2;
+      let hbY = py - uSize - 4;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(hbX, hbY, hbW, hbH);
+      let hpRatio = u.health / u.maxHealth;
+      ctx.fillStyle = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#ff9800' : '#f44336';
+      ctx.fillRect(hbX, hbY, hbW * hpRatio, hbH);
+    }
+
+    // Movement points
+    ctx.fillStyle = '#fff';
+    ctx.font = `${size * 0.4}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('▶'.repeat(u.moves), px + uSize + 4, py - uSize);
+  }
+
+  ctx.restore();
+
+  // Minimap
+  renderMinimap();
+}
+
+function renderMinimap() {
+  let mmW = 160, mmH = 120;
+  miniCanvas.width = mmW;
+  miniCanvas.height = mmH;
+  miniCtx.clearRect(0, 0, mmW, mmH);
+
+  let scaleX = mmW / CONFIG.MAP_W;
+  let scaleY = mmH / CONFIG.MAP_H;
+
+  // Draw terrain
+  for (let r = 0; r < CONFIG.MAP_H; r++) {
+    for (let c = 0; c < CONFIG.MAP_W; c++) {
+      let tile = G.grid[r][c];
+      if (!tile.explored) continue;
+      let colors = TERRAIN_COLORS[tile.terrain];
+      let color = tile.visible ? colors.fill : colors.dark;
+      miniCtx.fillStyle = color;
+      miniCtx.fillRect(c * scaleX, r * scaleY, scaleX + 0.5, scaleY + 0.5);
+    }
+  }
+
+  // Cities
+  for (let c of G.cities) {
+    miniCtx.fillStyle = G.players[c.playerId].color;
+    miniCtx.beginPath();
+    miniCtx.arc(c.col * scaleX + scaleX / 2, c.row * scaleY + scaleY / 2, 2, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+
+  // Camera viewport
+  let vpX = G.camera.x / (CONFIG.MAP_W * Math.sqrt(3) * CONFIG.HEX_SIZE) * mmW;
+  let vpY = G.camera.y / (CONFIG.MAP_H * 1.5 * CONFIG.HEX_SIZE) * mmH;
+  let vpW = canvasW / (CONFIG.MAP_W * Math.sqrt(3) * CONFIG.HEX_SIZE) * mmW;
+  let vpH = canvasH / (CONFIG.MAP_H * 1.5 * CONFIG.HEX_SIZE) * mmH;
+
+  miniCtx.strokeStyle = '#fff';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(vpX, vpY, vpW, vpH);
+}
+
+// ─── UI ────────────────────────────────────────────────────────
+function updateUI() {
+  let player = G.players[G.currentPlayer];
+  document.getElementById('turn-val').textContent = G.turn;
+  document.getElementById('gold-val').textContent = player.gold;
+  document.getElementById('player-color-val').textContent = player.name;
+  document.getElementById('endturn-btn').disabled = player.ai;
+
+  let totalPop = G.cities.filter(c => c.playerId === G.currentPlayer).reduce((s, c) => s + c.population, 0);
+  document.getElementById('pop-val').textContent = totalPop;
+
+  // Update selected info
+  renderSidePanel();
+}
+
+function renderSidePanel() {
+  let panel = document.getElementById('sidepanel');
+  if (!G.selected) {
+    panel.classList.remove('open');
+    return;
+  }
+
+  panel.classList.add('open');
+
+  if (G.selected.type === 'unit') {
+    let unit = G.units.find(u => u.id === G.selected.id);
+    if (!unit || unit.dead) { panel.classList.remove('open'); return; }
+    let stats = CONFIG.UNIT_STATS[unit.type];
+    let terrain = G.grid[unit.row][unit.col].terrain;
+
+    panel.innerHTML = `
+      <h3>${stats.icon} ${stats.name}</h3>
+      <div class="info-row"><span class="info-label">Player</span><span class="info-val" style="color:${G.players[unit.playerId].color}">${G.players[unit.playerId].name}</span></div>
+      <div class="info-row"><span class="info-label">Health</span><span class="info-val">${unit.health}/${unit.maxHealth}</span></div>
+      <div class="info-row"><span class="info-label">Moves</span><span class="info-val">${unit.moves}/${unit.maxMoves}</span></div>
+      <div class="info-row"><span class="info-label">Attack</span><span class="info-val">${stats.attack}</span></div>
+      <div class="info-row"><span class="info-label">Defense</span><span class="info-val">${stats.defense}</span></div>
+      <div class="info-row"><span class="info-label">Terrain</span><span class="info-val">${terrain}</span></div>
+      ${unit.fortified ? '<div class="info-row"><span class="info-label">Status</span><span class="info-val" style="color:#4fc3f7">Fortified</span></div>' : ''}
+      <hr style="border-color:#0f3460;margin:8px 0;">
+      <div class="info-row"><span class="info-label">Pos</span><span class="info-val">(${unit.col}, ${unit.row})</span></div>
+      ${unit.playerId === G.currentPlayer && unit.type === 'settler' && unit.moves > 0 ? `
+        <button class="action-btn" onclick="handleFoundCity(${unit.id})">🏙 Found City</button>
+      ` : ''}
+    `;
+  } else if (G.selected.type === 'city') {
+    let city = G.cities.find(c => c.id === G.selected.id);
+    if (!city) { panel.classList.remove('open'); return; }
+    let isMine = city.playerId === G.currentPlayer;
+
+    panel.innerHTML = `
+      <h3>🏙 ${G.players[city.playerId].name}'s City</h3>
+      <div class="info-row"><span class="info-label">Population</span><span class="info-val">${city.population}</span></div>
+      <div class="info-row"><span class="info-label">Health</span><span class="info-val">${city.health}/${city.maxHealth}</span></div>
+      <div class="info-row"><span class="info-label">Gold/Turn</span><span class="info-val">${city.goldPerTurn + city.population}</span></div>
+      <div class="info-row"><span class="info-label">Growth in</span><span class="info-val">${city.turnsToGrow} turns</span></div>
+      <hr style="border-color:#0f3460;margin:8px 0;">
+      ${isMine ? `
+        <div style="color:#4fc3f7;font-weight:bold;margin:8px 0;font-size:14px;">🏗 Production</div>
+        <button class="action-btn" onclick="handleCityProduce(${city.id},'warrior')">⚔️ Warrior (50g)</button>
+        <button class="action-btn" onclick="handleCityProduce(${city.id},'archer')">🏹 Archer (40g)</button>
+        <button class="action-btn" onclick="handleCityProduce(${city.id},'settler')">🚜 Settler (60g)</button>
+        ${city.productionQueue.length > 0 ? `<div style="margin-top:8px;font-size:12px;color:#888;">Queue: ${city.productionQueue.map(t => CONFIG.UNIT_STATS[t].icon).join(' ')}</div>` : ''}
+      ` : ''}
+    `;
+  }
+}
+
+// ─── GLOBAL HANDLERS (for onclick) ─────────────────────────────
+window.handleFoundCity = function(unitId) {
+  foundCity(unitId);
+};
+
+window.handleCityProduce = function(cityId, unitType) {
+  // Check cost
+  let cost = CONFIG.UNIT_STATS[unitType].cost;
+  if (cost > 0) {
+    // Can't afford - handled inside function
+  }
+  startCityProduction(cityId, unitType);
+};
+
+// ─── INPUT ─────────────────────────────────────────────────────
+function setupInput() {
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  canvas.addEventListener('mousedown', e => {
+    if (G.players[G.currentPlayer].ai) return;
+    let rect = canvas.getBoundingClientRect();
+    let mx = e.clientX - rect.left + G.camera.x;
+    let my = e.clientY - rect.top + G.camera.y;
+
+    let hex = HEX.pixelToHex(mx, my, CONFIG.HEX_SIZE);
+    if (!hex) return;
+
+    let [c, r] = hex;
+
+    if (e.button === 2) {
+      // Right click: move selected unit
+      if (G.selected && G.selected.type === 'unit') {
+        let unit = G.units.find(u => u.id === G.selected.id);
+        if (unit && unit.playerId === G.currentPlayer && !unit.dead) {
+          moveUnit(unit.id, c, r);
+        }
+      }
+      return;
+    }
+
+    // Left click
+    if (e.button === 0) {
+      // Check if we clicked on a city
+      let city = G.cities.find(ct => ct.col === c && ct.row === r);
+      if (city) {
+        G.selected = { type: 'city', id: city.id };
+        render();
+        updateUI();
+        return;
+      }
+
+      // Check if we clicked on a unit
+      let unit = G.units.find(u => u.col === c && u.row === r && !u.dead);
+      if (unit) {
+        G.selected = { type: 'unit', id: unit.id };
+        render();
+        updateUI();
+        return;
+      }
+
+      // Clicked on empty hex
+      G.selected = null;
+      render();
+      updateUI();
+    }
+  });
+
+  // Canvas panning
+  let panning = false, panX = 0, panY = 0;
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 1) { // Middle mouse
+      panning = true;
+      panX = e.clientX - G.camera.x;
+      panY = e.clientY - G.camera.y;
+      e.preventDefault();
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    if (panning) {
+      G.camera.x = e.clientX - panX;
+      G.camera.y = e.clientY - panY;
+      clampCamera();
+      render();
+    }
+  });
+
+  canvas.addEventListener('mouseup', e => {
+    if (e.button === 1) panning = false;
+  });
+
+  canvas.addEventListener('mouseleave', () => { panning = false; });
+
+  // Scroll wheel zoom / pan
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    let speed = 40;
+    G.camera.x += e.deltaX * 0.8;
+    G.camera.y += e.deltaY * 0.8;
+    clampCamera();
+    render();
+  }, { passive: false });
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    let speed = 30;
+    switch (e.key) {
+      case 'ArrowUp': G.camera.y -= speed; clampCamera(); render(); break;
+      case 'ArrowDown': G.camera.y += speed; clampCamera(); render(); break;
+      case 'ArrowLeft': G.camera.x -= speed; clampCamera(); render(); break;
+      case 'ArrowRight': G.camera.x += speed; clampCamera(); render(); break;
+      case 'Escape': G.selected = null; render(); updateUI(); break;
+      case 'f': case 'F':
+        if (G.selected && G.selected.type === 'unit') {
+          let unit = G.units.find(u => u.id === G.selected.id);
+          if (unit && unit.playerId === G.currentPlayer) {
+            unit.fortified = !unit.fortified;
+            showNotification(unit.fortified ? '🛡 Unit fortified!' : 'Unit unfortified');
+            render(); updateUI();
+          }
+        }
+        break;
+    }
+  });
+
+  // Minimap click
+  miniCanvas.addEventListener('click', e => {
+    let rect = miniCanvas.getBoundingClientRect();
+    let mx = e.clientX - rect.left;
+    let my = e.clientY - rect.top;
+    let mmW = miniCanvas.width, mmH = miniCanvas.height;
+    let worldW = CONFIG.MAP_W * Math.sqrt(3) * CONFIG.HEX_SIZE;
+    let worldH = CONFIG.MAP_H * 1.5 * CONFIG.HEX_SIZE;
+    G.camera.x = (mx / mmW) * worldW - canvasW / 2;
+    G.camera.y = (my / mmH) * worldH - canvasH / 2;
+    clampCamera();
+    render();
+  });
+}
+
+function clampCamera() {
+  let maxX = CONFIG.MAP_W * Math.sqrt(3) * CONFIG.HEX_SIZE - canvasW;
+  let maxY = CONFIG.MAP_H * 1.5 * CONFIG.HEX_SIZE - canvasH;
+  G.camera.x = Math.max(0, Math.min(maxX, G.camera.x));
+  G.camera.y = Math.max(0, Math.min(maxY, G.camera.y));
+}
+
+// ─── NOTIFICATIONS ─────────────────────────────────────────────
+function showNotification(msg) {
+  let el = document.getElementById('notification');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function addLog(msg) {
+  G.logs.push(msg);
+  showNotification(msg);
+}
+
+// ─── SAVE/LOAD ─────────────────────────────────────────────────
+function saveGame() {
+  try {
+    localStorage.setItem('tinyciv_save', JSON.stringify(G));
+  } catch(e) {}
+}
+
+// ─── RESIZE ────────────────────────────────────────────────────
+function resizeCanvas() {
+  canvasW = window.innerWidth;
+  canvasH = window.innerHeight - 44; // minus topbar
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  if (G) { clampCamera(); render(); }
+}
+
+// ─── INIT ──────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  canvas = document.getElementById('gamecanvas');
+  miniCanvas = document.getElementById('minimap');
+  ctx = canvas.getContext('2d');
+  miniCtx = miniCanvas.getContext('2d');
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  setupInput();
+
+  document.getElementById('start-btn').addEventListener('click', () => {
+    document.getElementById('startup').style.display = 'none';
+    initGame(false);
+    updateUI();
+    G.currentPlayer = 0;
+    startTurn();
+  });
+
+  document.getElementById('load-btn').addEventListener('click', () => {
+    let saved = localStorage.getItem('tinyciv_save');
+    if (saved) {
+      document.getElementById('startup').style.display = 'none';
+      initGame(true);
+      if (G) {
+        updateUI();
+        updateFOW(G.currentPlayer);
+        render();
+        // If it's AI's turn, process it
+        if (G.players[G.currentPlayer].ai) {
+          startTurn();
+        }
+      }
+    } else {
+      showNotification('No saved game found!');
+    }
+  });
+
+  document.getElementById('endturn-btn').addEventListener('click', () => {
+    if (G.players[G.currentPlayer].ai) return;
+    G.selected = null;
+    endTurn();
+  });
+});
+</script>
+</body>
+</html>
