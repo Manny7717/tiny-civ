@@ -208,7 +208,8 @@ const HEX = {
     let aq1 = c1 - Math.floor(r1 / 2);
     let aq2 = c2 - Math.floor(r2 / 2);
     let ar1 = r1, ar2 = r2;
-    let dq = aq2 - aq1, dr = ar2 - ar1;
+    let dq = aq2 - aq1;
+    dr = ar2 - ar1;
     let ds = -dq - dr;
     return Math.max(Math.abs(dq), Math.abs(dr), Math.abs(ds));
   },
