@@ -127,15 +127,15 @@
 
 // ─── CONFIG ────────────────────────────────────────────────────
 const CONFIG = {
-  MAP_W: 40,
-  MAP_H: 30,
+  MAP_W: 50,
+  MAP_H: 50,
   HEX_SIZE: 26,
   PLAYERS: [
     { id: 0, name: 'You',    color: '#4fc3f7', ai: false },
     { id: 1, name: 'Rome',   color: '#e53935', ai: true  },
     { id: 2, name: 'Mongol', color: '#fdd835', ai: true  },
   ],
-  FOW_VISIBLE_RANGE: 3,
+  FOW_VISIBLE_RANGE: 2,
   UNIT_STATS: {
     settler:  { name: 'Settler',  move: 2, attack: 0, defense: 1, health: 10, cost: 0, icon: '🚜' },
     scout:    { name: 'Scout',    move: 4, attack: 2, defense: 1, health: 8,  cost: 0, icon: '🏹' },
@@ -287,8 +287,8 @@ function generateMap() {
 
   for (let r = 0; r < CONFIG.MAP_H; r++) {
     for (let c = 0; c < CONFIG.MAP_W; c++) {
-      let elev = smoothNoise(c, r) + detailNoise[r * CONFIG.MAP_W + c];
-      let moist = smoothMoisture(c, r) + detailNoise[r * CONFIG.MAP_W + c + 1234];
+      let elev = smoothNoise(c, r) + detailNoise[(r * CONFIG.MAP_W + c) % detailNoise.length];
+      let moist = smoothMoisture(c, r) + detailNoise[(r * CONFIG.MAP_W + c + 1234) % detailNoise.length];
       elev = Math.max(0, Math.min(1, elev));
       moist = Math.max(0, Math.min(1, moist));
 
@@ -437,7 +437,8 @@ function initGame(loadSaved = false) {
   addUnit(0, 'scout', startLoc[0] + 1, startLoc[1]);
 
   // Reveal starting area
-  revealAround(startLoc[0], startLoc[1], CONFIG.FOW_VISIBLE_RANGE * 2);
+  // Reveal starting area (larger reveal on start)
+  revealAround(startLoc[0], startLoc[1], 5);
 
   // Place AI players
   for (let [c, r, pid] of aiStarts) {
